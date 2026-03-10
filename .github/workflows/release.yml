@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+      - run: go mod download
+      - run: go test -v -race ./...
+
+      - name: Build binaries
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          mkdir -p dist
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/leakcheck-darwin-arm64  ./cmd/leakcheck
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/leakcheck-darwin-amd64  ./cmd/leakcheck
+          GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/leakcheck-linux-amd64   ./cmd/leakcheck
+          GOOS=linux   GOARCH=arm64 go build -ldflags "-X main.Version=${VERSION}" -o dist/leakcheck-linux-arm64   ./cmd/leakcheck
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o dist/leakcheck-windows-amd64.exe ./cmd/leakcheck
+          cd dist && sha256sum * > checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: leakcheck ${{ github.ref_name }}
+          body: |
+            ## Installation
+```bash
+            curl -fsSL https://raw.githubusercontent.com/JonathanInTheClouds/leakcheck/main/install.sh | bash
+```
+          files: |
+            dist/leakcheck-darwin-arm64
+            dist/leakcheck-darwin-amd64
+            dist/leakcheck-linux-amd64
+            dist/leakcheck-linux-arm64
+            dist/leakcheck-windows-amd64.exe
+            dist/checksums.txt
